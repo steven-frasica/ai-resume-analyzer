@@ -9,6 +9,7 @@ interface FileUploaderProps {
 
 const FileUploader = ({ file, onFileSelect }: FileUploaderProps) => {
 
+  // Normalize dropzone output to a single selected PDF and hand it back to the parent route.
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0] || null;
 
@@ -17,6 +18,7 @@ const FileUploader = ({ file, onFileSelect }: FileUploaderProps) => {
 
   const maxFileSize = 20 * 1024 * 1024;
 
+  // Restrict uploads to a single PDF and let react-dropzone manage the hidden input wiring.
   const { getRootProps, getInputProps } = useDropzone({
     onDrop, multiple: false, accept: { 'application/pdf': ['.pdf'] }, maxSize: maxFileSize,
   })
@@ -28,6 +30,7 @@ const FileUploader = ({ file, onFileSelect }: FileUploaderProps) => {
         <div className="space-y-4 cursor-pointer">
 
           {file ? (
+            // Show the selected file summary and allow removal without submitting the parent form.
             <div className='uploader-selected-file' onClick={(event) => event.stopPropagation()}>
               <img src="/images/pdf.png" alt="pdf" className="size-10" />
               <div className='flex items-center space-x-3'>
@@ -53,6 +56,7 @@ const FileUploader = ({ file, onFileSelect }: FileUploaderProps) => {
               </button>
             </div>
           ) : (
+            // Empty state invites the user to click or drag a PDF into the dropzone.
             <div>
               <div className='mx-auto w-16 h-16 flex items-center justify-center mb-2'>
                 <img src="/icons/info.svg" alt="upload" className='size-20' />

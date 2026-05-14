@@ -1,29 +1,90 @@
 import { type SubmitEvent, useState } from 'react'
+import { useNavigate } from 'react-router';
 import FileUploader from '~/components/FileUploader';
 import Navbar from '~/components/Navbar'
+import { convertPdfToImage } from '~/lib/pdf2img';
+import { usePuterStore } from '~/lib/puter';
+import { generateUUID } from '~/lib/utils';
+import { prepareInstructions } from '../../constants';
 
 const Upload = () => {
-  const [isProcessing, setIsProcessing] = useState();
+  // Puter services back the upload and analysis pipeline for the submitted resume.
+  const { auth, isLoading, fs, ai, kv} = usePuterStore();
+  const navigate = useNavigate();
+
+  // Local route state controls the selected file and the progress UI shown during analysis.
+  const [isProcessing, setIsProcessing] = useState(false);
   const [statusText, setStatusText] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
+  // Keep the selected resume in parent state so the uploader and submit flow share one source of truth.
   const handleFileSelect = (file: File | null) => {
     setFile(file);
   }
 
+  // Run the resume analysis pipeline: upload the PDF, render the first page to an image, then upload that image.
+  const handleAnalyze = async ({ companyName, jobTitle, jobDescription , file} : { companyName: string, jobTitle: string, jobDescription: string, file: File}) => {
+    setIsProcessing(true);
+    setStatusText('Uploading the file ...');
+    const uploadedFile = await fs.upload([file])
+
+    if(!uploadedFile) return setStatusText('Error: Failed to upload file');
+
+    setStatusText('Converting to image ...');
+    const imageFile = await convertPdfToImage(file);
+    if(!imageFile.file) return setStatusText(imageFile.error ?? 'Error: Failed to convert PDF to image');
+
+    setStatusText('Uploading the image ...')
+    const uploadedImage = await fs.upload([imageFile.file])
+
+    if(!uploadedImage) return setStatusText('Error: Failed to upload image');
+
+    setStatusText('Preparing data ...');
+
+    const uuid = generateUUID();
+
+    const data = {
+      id: uuid,
+      resumePath: uploadedFile.path,
+      imagePath: uploadedImage.path,
+      companyName, jobTitle, jobDescription,
+      feedback: ''
+    }
+
+    await kv.set(`resume:${uuid}`, JSON.stringify(data));
+
+    setStatusText('Analyzing ...');
+    
+    const feedback = await ai.feedback(
+      uploadedFile.path,
+      prepareInstructions({ jobTitle, jobDescription })
+    )
+    if (!feedback) return setStatusText('Error: Failed to analyze resume');
+
+    const feedbackText = typeof feedback.message.content === 'string'
+      ? feedback.message.content
+      : feedback.message.content[0].text;
+
+    data.feedback = JSON.parse(feedbackText);
+    await kv.set(`resume:${uuid}`, JSON.stringify(data));
+    setStatusText('Analysis complete, redirecting ...');
+    console.log(data);
+  }
+
+  // Gather the form inputs and selected file, then start the async analysis workflow.
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget.closest('form')
     if(!form) return;
     const formData = new FormData(form);
 
-    const companyName = formData.get('company-name')
-    const jobTitle = formData.get('job-title')
-    const jobDescription = formData.get('job-description')
+    const companyName = formData.get('company-name') as string;
+    const jobTitle = formData.get('job-title') as string;
+    const jobDescription = formData.get('job-description') as string;
 
-    console.log( {
-      companyName, jobTitle, jobDescription, file
-    })
+    if(!file) return;
+
+    handleAnalyze( { companyName, jobTitle, jobDescription, file})
   }
 
   return (
@@ -33,6 +94,7 @@ const Upload = () => {
       <section className="main-section">
         <div className="page-heading py-16">
           <h1>Smart Feedback for your Dream Job</h1>
+          {/* Swap the form for a progress view once the analysis pipeline starts. */}
           {isProcessing ? (
             <>
               <h2>{statusText}</h2>
@@ -41,6 +103,7 @@ const Upload = () => {
           ) : (
             <h2>Drop your resume for an ATS score and improvement tips</h2>
           )}
+          {/* The form collects job context and delegates resume selection to the uploader component. */}
           {!isProcessing && (
             <form id='upload-form' onSubmit={handleSubmit} className='flex flex-col gap-4 mt-8'>
               <div className="form-div">
