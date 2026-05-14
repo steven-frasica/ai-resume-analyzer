@@ -69,6 +69,7 @@ const Upload = () => {
     await kv.set(`resume:${uuid}`, JSON.stringify(data));
     setStatusText('Analysis complete, redirecting ...');
     console.log(data);
+    navigate(`/resume/${uuid}`)
   }
 
   // Gather the form inputs and selected file, then start the async analysis workflow.
