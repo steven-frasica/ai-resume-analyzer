@@ -36,7 +36,7 @@ const Summary = ({ feedback }: {feedback: Feedback}) => {
       <Category title="Tone & Style" score={feedback.toneAndStyle.score}></Category>
       <Category title="Content" score={feedback.content.score}></Category>
       <Category title="Structure" score={feedback.structure.score}></Category>
-      <Category title="Skills" score={feedback.toneAndStyle.score}></Category>
+      <Category title="Skills" score={feedback.skills.score}></Category>
     </div>
   )
 }
